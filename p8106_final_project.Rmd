@@ -1,0 +1,448 @@
+---
+title: "p8106 Final Project"
+author: "Qixiang Chen"
+date: "5/5/2022"
+output: pdf_document
+---
+
+```{r, include = FALSE}
+library(tidyverse)
+library(rvest)
+library(ggplot2)
+library(caret)
+library(pROC)
+library(vip)
+library(MASS)
+library(AppliedPredictiveModeling)
+library(GGally)
+library(ranger)
+library(randomForest)
+library(viridis)
+library(rpart)
+library(rpart.plot)
+library(gridExtra)
+library(mlbench)
+library(party)
+library(ISLR)
+library(partykit)
+library(gbm)
+library(e1071)
+library(factoextra)
+library(gridExtra)
+library(kernlab)
+```
+
+
+TO-DO List:
+1. explanatory analysis (Is there any interesting structure present in the data? What were your findings?)
+2. visualization work (feature plot done, plots for factors)
+3. build 6 classification models
+4. build a frame for the final model selection (ROC, AUC, ConfusionMatrix, error rate)
+5. Try to list out the important predictors
+6. tuning parameters
+7. interpretation of each model
+
+
+In this dataset, `age` refers to age in days. For variable `gender`, 1 represents women, 2 represents men. Thus, we need to do the corresponding adjustments to make it look formal.
+
+1. Since variable `id` does not contribute to the following analysis, we exclude `id` from the dataset.
+2. For variable `gender`, 1 represents women, 2 represents men. To make it serve as a dummy variable, we convert it into factor.
+
+```{r}
+df = read.csv("./cardio_train.csv", header = TRUE, stringsAsFactors = FALSE, sep = ";") %>%
+  janitor::clean_names() %>%
+  dplyr::select(-id) %>%
+  rename(age_day = age) %>%
+  mutate(gender = gender - 1,
+         cholesterol = case_when(cholesterol == 1 ~ "normal",
+                                 cholesterol == 2 ~ "above normal",
+                                 cholesterol == 3 ~ "well above normal"
+                                 ),
+         gluc = case_when(gluc == 1 ~ "normal",
+                          gluc == 2 ~ "above normal",
+                          gluc == 3 ~ "well above normal"
+                          ),
+         gender = as.factor(gender),
+         smoke = as.factor(smoke),
+         alco = as.factor(alco),
+         active = as.factor(active),
+         cardio = case_when(cardio == 0 ~ "nondiseased",
+                            cardio == 1 ~ "diseased"
+                            ),
+         cardio = as.factor(cardio)
+         ) %>%
+  mutate(cholesterol = as.factor(cholesterol),
+         gluc = as.factor(gluc)
+         ) %>%
+  dplyr::select(age_day, height, weight, ap_hi, ap_lo, everything())
+
+df
+
+#Check whether there is any missing value.
+missing_train = sapply(df, function(x) sum(is.na(x)))
+print(missing_train[missing_train > 0])
+
+#Summary
+summary(df)
+
+#Corr Plot
+x_df = model.matrix(cardio ~ ., df)[,-1]
+corrplot::corrplot(cor(x_df),
+                   method = "circle",
+                   type = "full",
+                   tl.cex = 0.5)
+
+```
+
+
+
+
+```{r}
+set.seed(2022)
+# Randomly sample 3500 data points without replacement from the dataset.
+df_sample = sample_n(df, 1000) %>%
+  janitor::clean_names()
+
+#colnames(df_sample)[0] <- "id"
+
+df_sample
+
+summary(df_sample)
+
+
+#Feature Plot
+featurePlot(x = df_sample[, 1:5],
+            y = df_sample$cardio,
+            scales = list(x = list(relation="free"),
+                          y = list(relation="free")),
+            plot = "density", 
+            pch = "|",
+            auto.key = list(columns = 2)
+            )
+
+
+
+set.seed(2022)
+training_tag = createDataPartition(y = df_sample$cardio,
+                                   p = 0.7,
+                                   list = FALSE)
+
+# For training dataset
+training_data = df_sample[training_tag, ]
+training_predictors_x = as.data.frame(model.matrix(cardio ~ ., training_data)[, -1]) %>%
+  janitor::clean_names()
+training_outcome_y = training_data$cardio
+
+
+# For test dataset
+test_data = df_sample[-training_tag, ]
+test_predictors_x = as.data.frame(model.matrix(cardio ~ ., test_data)[, -1]) %>%
+  janitor::clean_names()
+test_outcome_y = test_data$cardio
+
+# Control
+control = trainControl(method = "repeatedcv",
+                       summaryFunction = twoClassSummary,
+                       repeats = 5,
+                       classProbs = TRUE)
+```
+
+
+
+1.logistic regression
+```{r}
+#undiseased: 1
+#diseased:0
+contrasts(df_sample$cardio)
+
+set.seed(2022)
+glm_fit = glm(cardio ~ .,
+              data = df_sample,
+              subset = training_tag,
+              family = binomial(link = "logit")
+              )
+summary(glm_fit)
+
+
+test_pred_prob = predict(glm_fit, newdata = test_data,
+                         type = "response"
+                         )
+
+test_pred = rep("diseased", length(test_pred_prob))
+
+test_pred[test_pred_prob > 0.5] = "nondiseased"
+
+confusionMatrix(data = as.factor(test_pred),
+                reference = test_outcome_y
+                )
+
+auc(test_outcome_y, test_pred_prob)
+
+
+#caret logistic for model selection
+set.seed(2022)
+logistic_caret = train(x = training_predictors_x,
+                       y = training_outcome_y,
+                       method = "glm",
+                       metric = "ROC",
+                       trControl = control
+                       )
+summary(logistic_caret)
+```
+
+
+2. MARS
+```{r, message = FALSE}
+#adjust cardio to be dummy
+
+set.seed(2022)
+mars_model = train(x = training_predictors_x,
+                   y = training_outcome_y,
+                   method = "earth",
+                   tuneGrid = expand.grid(degree = 1:3, nprune = 2:13),
+                   metric = "ROC",
+                   trControl = control
+                   )
+summary(mars_model)
+
+ggplot(mars_model, highlight = T)
+
+mars_model$bestTune
+coef(mars_model$finalModel)
+vip(mars_model$finalModel)
+
+mars_test_pred_prob_df = predict(mars_model, newdata = test_data,
+                         type = "prob"
+                         )
+
+mars_test_pred_prob = mars_test_pred_prob_df$nondiseased
+
+mars_test_pred = rep("diseased", length(mars_test_pred_prob))
+
+mars_test_pred[mars_test_pred_prob > 0.5] = "nondiseased"
+
+confusionMatrix(data = as.factor(mars_test_pred),
+                reference = test_outcome_y
+                )
+
+auc(test_outcome_y, mars_test_pred_prob)
+```
+
+
+3. LDA
+```{r}
+set.seed(2022)
+lda_model = train(x = training_predictors_x,
+                  y = training_outcome_y,
+                  data = training_data,
+                  method = "lda",
+                  metric = "ROC",
+                  trControl = control)
+lda_model$results
+
+lda_fit = lda(cardio ~., data = df_sample, subset = training_tag)
+plot(lda_fit)
+lda_fit$scaling
+```
+
+
+4. Boosting
+```{r}
+set.seed(2022)
+
+boost_grid = expand.grid(n.trees = c(1000, 2000, 3000, 4000),
+                            interaction.depth = 1:6,
+                            shrinkage = c(0.0005, 0.001, 0.002),
+                            n.minobsinnode = 1)
+
+control_class = trainControl(method = "repeatedcv", 
+                             number = 10, 
+                             repeats = 5,
+                             classProbs = TRUE,
+                             summaryFunction = twoClassSummary
+                             )
+
+# Using caret perform boosting on the training data
+boost_caret = train(cardio ~ .,
+                       data = training_data,
+                       method = "gbm",
+                       tuneGrid = boost_grid,
+                       trControl = control_class,
+                       distribution = "adaboost",
+                       metric = "ROC",
+                       verbose = FALSE)
+
+ggplot(boost_caret, highlight = TRUE)
+boost_caret$bestTune
+# Plot the variable importance
+summary(boost_caret$finalModel, las = 2, cBars = 19, cex.names = 0.6)
+```
+
+
+5. Classification Tree
+```{r}
+set.seed(2022)
+classification_tree_minMSE = rpart(formula = cardio ~ . ,
+                                data = training_data,
+                                control = rpart.control(cp = 0))
+
+plotcp(classification_tree_minMSE)
+
+# Obtain cp table
+cp_table = printcp(classification_tree_minMSE)
+
+
+df_MSE_min = which.min(cp_table[, 4])
+final_class_tree_minMSE = prune(classification_tree_minMSE, cp = cp_table[df_MSE_min, 1])
+
+
+
+
+# Build classification tree using training dataset
+classification_tree_1SE = prune(classification_tree_minMSE,
+                             cp = cp_table[cp_table[, 4] < cp_table[df_MSE_min, 4] + cp_table[df_MSE_min, 5], 1][1])
+
+plotcp(classification_tree_1SE)
+
+# Obtain cp table
+cp_table_1se = printcp(classification_tree_1SE)
+
+# Plot the 1SE tree
+rpart.plot(classification_tree_1SE)
+
+plot(as.party(classification_tree_1SE))
+
+
+auc(test_outcome_y, predict(classification_tree_1SE, newdata = test_data)[, 2])
+
+ct_test_pred_prob = predict(classification_tree_1SE, newdata = test_data)[, 2]
+
+ct_test_pred = rep("diseased", length(ct_test_pred_prob))
+
+ct_test_pred[ct_test_pred_prob > 0.5] = "nondiseased"
+
+confusionMatrix(data = as.factor(ct_test_pred),
+                reference = test_outcome_y
+                )
+
+
+
+# plot the minimum MSE classification tree
+plot(as.party(final_class_tree_minMSE))
+rpart.plot(final_class_tree_minMSE)
+```
+
+
+```{r}
+# Train caret random forest model
+set.seed(2022)
+# Grid of tuning parameters
+rf_grid = expand.grid(mtry = 1:12, 
+                      splitrule = "gini",
+                      min.node.size = seq(from = 2, to = 10, by = 2)
+                      )
+
+# Find best-fitting model after model fitting to optimize computational efficiency
+rf_fit = train(cardio ~ .,
+              data = training_data,
+              method = "ranger",
+              tuneGrid = rf_grid,
+              metric = "ROC",
+              trControl = control_class)
+
+summary(rf_fit)
+
+rf_pred = predict(rf_fit, newdata = test_data, type = "prob")[,2]
+#rf_pred
+
+
+#ConfusionMatrix
+test_pred_rf = rep("diseased", length(test_pred_prob))
+
+test_pred_rf[rf_pred > 0.5] = "nondiseased"
+
+confusionMatrix(data = as.factor(test_pred_rf),
+                reference = test_outcome_y
+                )
+```
+
+
+
+```{r}
+# Using impurity method to obtain variable importance
+set.seed(2022)
+rf_impurity_variable_importance = ranger(cardio ~ . ,
+                             data = training_data,
+                             mtry = rf_fit$bestTune[[1]],
+                             splitrule = "gini",
+                             min.node.size = rf_fit$bestTune[[3]],
+                             importance = "impurity")
+
+
+# plot of variable importance using impurity
+barplot(sort(ranger::importance(rf_impurity_variable_importance), 
+             decreasing = FALSE),
+        las = 2,
+        horiz = TRUE,
+        cex.names = 0.7,
+        col = colorRampPalette(colors = c("cyan", "blue"))(19)
+        )
+
+# Using permutation method to obtain variable importance
+rf_permutation_variable_importance = ranger(cardio ~ . ,
+                             data = training_data,
+                             mtry = rf_fit$bestTune[[1]],
+                             splitrule = "gini",
+                             min.node.size = rf_fit$bestTune[[3]],
+                             importance = "permutation",
+                             scale.permutation.importance = TRUE)
+
+# plot of variable importance using permutation
+barplot(sort(ranger::importance(rf_permutation_variable_importance), 
+             decreasing = FALSE),
+        las = 2,
+        horiz = TRUE,
+        cex.names = 0.7,
+        col = colorRampPalette(colors = c("cyan", "blue"))(19)
+        )
+```
+
+
+
+
+6. SVM
+```{r}
+set.seed(2022)
+linear_svc = tune.svm(cardio ~ .,
+                      data = training_data,
+                      kernel = "linear",
+                      cost = exp(seq(-5, 2, len = 50)),
+                      scale = TRUE)
+
+plot(linear_svc)
+linear_svc$best.parameters
+best_linear_svc  = linear_svc$best.model
+summary(best_linear_svc)
+
+confusionMatrix(data = linear_svc$best.model$fitted,
+                reference = training_outcome_y)
+```
+
+
+
+
+Final Model Selection:
+```{r}
+set.seed(2022)
+
+resamp = resamples(list(MARS = mars_model,
+                        LDA = lda_model,
+                        LOGISTIC = logistic_caret,
+                        BOOSTING = boost_caret,
+                        RANDOM_FOREST =  rf_fit
+                         )
+                   )
+summary(resamp)
+bwplot(resamp, metric = "ROC")
+```
+
