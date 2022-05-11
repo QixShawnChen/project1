@@ -152,8 +152,8 @@ control = trainControl(method = "repeatedcv",
 
 1.logistic regression
 ```{r}
-#undiseased: 1
-#diseased:0
+#undiseased: 0
+#diseased: 1
 contrasts(df_sample$cardio)
 
 set.seed(2022)
@@ -169,9 +169,9 @@ test_pred_prob = predict(glm_fit, newdata = test_data,
                          type = "response"
                          )
 
-test_pred = rep("diseased", length(test_pred_prob))
+test_pred = rep("nondiseased", length(test_pred_prob))
 
-test_pred[test_pred_prob > 0.5] = "nondiseased"
+test_pred[test_pred_prob > 0.5] = "diseased"
 
 confusionMatrix(data = as.factor(test_pred),
                 reference = test_outcome_y
@@ -212,15 +212,15 @@ mars_model$bestTune
 coef(mars_model$finalModel)
 vip(mars_model$finalModel)
 
-mars_test_pred_prob_df = predict(mars_model, newdata = test_data,
+mars_test_pred_prob_df = predict(mars_model, newdata = test_predictors_x,
                          type = "prob"
                          )
 
-mars_test_pred_prob = mars_test_pred_prob_df$nondiseased
+mars_test_pred_prob = mars_test_pred_prob_df$diseased
 
-mars_test_pred = rep("diseased", length(mars_test_pred_prob))
+mars_test_pred = rep("nondiseased", length(mars_test_pred_prob))
 
-mars_test_pred[mars_test_pred_prob > 0.5] = "nondiseased"
+mars_test_pred[mars_test_pred_prob > 0.5] = "diseased"
 
 confusionMatrix(data = as.factor(mars_test_pred),
                 reference = test_outcome_y
@@ -309,6 +309,9 @@ cp_table = printcp(classification_tree_minMSE)
 df_MSE_min = which.min(cp_table[, 4])
 final_class_tree_minMSE = prune(classification_tree_minMSE, cp = cp_table[df_MSE_min, 1])
 
+# plot the minimum MSE classification tree
+plot(as.party(final_class_tree_minMSE))
+rpart.plot(final_class_tree_minMSE)
 
 
 
@@ -338,11 +341,8 @@ ct_test_pred[ct_test_pred_prob > 0.5] = "nondiseased"
 confusionMatrix(data = as.factor(ct_test_pred),
                 reference = test_outcome_y
                 )
-
-# plot the minimum MSE classification tree
-plot(as.party(final_class_tree_minMSE))
-rpart.plot(final_class_tree_minMSE)
 ```
+
 
 ## Random forest
 ```{r}
@@ -369,9 +369,9 @@ rf_pred = predict(rf_fit, newdata = test_data, type = "prob")[,2]
 
 
 #ConfusionMatrix
-test_pred_rf = rep("diseased", length(rf_pred ))
+test_pred_rf = rep("nondiseased", length(rf_pred ))
 
-test_pred_rf[rf_pred > 0.5] = "nondiseased"
+test_pred_rf[rf_pred > 0.5] = "diseased"
 
 confusionMatrix(data = as.factor(test_pred_rf),
                 reference = test_outcome_y
@@ -438,9 +438,9 @@ plot(linear_svc)
 linear_svc$bestTune
 svm_pred = predict(linear_svc, newdata = test_data, type = "prob")[, 2]
 
-test_pred_svm = rep("diseased", length(svm_pred))
+test_pred_svm = rep("nondiseased", length(svm_pred))
 
-test_pred_svm[svm_pred > 0.5] = "nondiseased"
+test_pred_svm[svm_pred > 0.5] = "diseased"
 
 confusionMatrix(data = as.factor(test_pred_svm),
                 reference = test_outcome_y)
