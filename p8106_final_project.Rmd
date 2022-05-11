@@ -325,14 +325,12 @@ confusionMatrix(data = as.factor(ct_test_pred),
                 reference = test_outcome_y
                 )
 
-
-
 # plot the minimum MSE classification tree
 plot(as.party(final_class_tree_minMSE))
 rpart.plot(final_class_tree_minMSE)
 ```
 
-
+## Random forest
 ```{r}
 # Train caret random forest model
 set.seed(2022)
@@ -357,13 +355,15 @@ rf_pred = predict(rf_fit, newdata = test_data, type = "prob")[,2]
 
 
 #ConfusionMatrix
-test_pred_rf = rep("diseased", length(test_pred_prob))
+test_pred_rf = rep("diseased", length(rf_pred ))
 
 test_pred_rf[rf_pred > 0.5] = "nondiseased"
 
 confusionMatrix(data = as.factor(test_pred_rf),
                 reference = test_outcome_y
                 )
+
+auc(test_outcome_y, rf_pred)
 ```
 
 
@@ -413,19 +413,23 @@ barplot(sort(ranger::importance(rf_permutation_variable_importance),
 6. SVM
 ```{r}
 set.seed(2022)
-linear_svc = tune.svm(cardio ~ .,
+linear_svc = train(cardio ~ .,
                       data = training_data,
-                      kernel = "linear",
-                      cost = exp(seq(-5, 2, len = 50)),
-                      scale = TRUE)
+                      method = "svmLinear",
+                      tuneGrid = data.frame(C = exp(seq(-5, 2, len = 50))), 
+                      trControl = control_class, 
+                   scale = TRUE)
 
 plot(linear_svc)
-linear_svc$best.parameters
-best_linear_svc  = linear_svc$best.model
-summary(best_linear_svc)
+linear_svc$bestTune
+svm_pred = predict(linear_svc, newdata = test_data, type = "prob")[, 2]
 
-confusionMatrix(data = linear_svc$best.model$fitted,
-                reference = training_outcome_y)
+test_pred_svm = rep("diseased", length(svm_pred))
+
+test_pred_svm[svm_pred > 0.5] = "nondiseased"
+
+confusionMatrix(data = as.factor(test_pred_svm),
+                reference = test_outcome_y)
 ```
 
 
@@ -440,9 +444,9 @@ resamp = resamples(list(MARS = mars_model,
                         LOGISTIC = logistic_caret,
                         BOOSTING = boost_caret,
                         RANDOM_FOREST =  rf_fit
-                         )
-                   )
+                        #SVM = linear_svc
+                        ))
 summary(resamp)
-bwplot(resamp, metric = "ROC")
+bwplot(resamp)
 ```
 
