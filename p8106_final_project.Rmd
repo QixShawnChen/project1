@@ -334,9 +334,9 @@ auc(test_outcome_y, predict(classification_tree_1SE, newdata = test_data)[, 2])
 
 ct_test_pred_prob = predict(classification_tree_1SE, newdata = test_data)[, 2]
 
-ct_test_pred = rep("diseased", length(ct_test_pred_prob))
+ct_test_pred = rep("nondiseased", length(ct_test_pred_prob))
 
-ct_test_pred[ct_test_pred_prob > 0.5] = "nondiseased"
+ct_test_pred[ct_test_pred_prob > 0.5] = "diseased"
 
 confusionMatrix(data = as.factor(ct_test_pred),
                 reference = test_outcome_y
