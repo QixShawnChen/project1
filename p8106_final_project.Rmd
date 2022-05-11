@@ -76,7 +76,7 @@ df = read.csv("./cardio_train.csv", header = TRUE, stringsAsFactors = FALSE, sep
          ) %>%
   dplyr::select(age_day, height, weight, ap_hi, ap_lo, everything())
 
-df
+#df
 
 #Check whether there is any missing value.
 missing_train = sapply(df, function(x) sum(is.na(x)))
@@ -99,16 +99,18 @@ corrplot::corrplot(cor(x_df),
 
 ```{r}
 set.seed(2022)
-# Randomly sample 3500 data points without replacement from the dataset.
+# Randomly sample 3500 data points without replacement from the data set.
 df_sample = sample_n(df, 1000) %>%
   janitor::clean_names()
 
-#colnames(df_sample)[0] <- "id"
+#colnames(df_sample)[0] <- "id
 
-df_sample
+#save R data
+save(df_sample, file = "df_sample.RData")
 
-summary(df_sample)
+#summary(df_sample)
 
+load("df_sample.RData")
 
 #Feature Plot
 featurePlot(x = df_sample[, 1:5],
@@ -128,16 +130,14 @@ training_tag = createDataPartition(y = df_sample$cardio,
                                    list = FALSE)
 
 # For training dataset
-training_data = df_sample[training_tag, ]
-training_predictors_x = as.data.frame(model.matrix(cardio ~ ., training_data)[, -1]) %>%
-  janitor::clean_names()
+training_data = df_sample[training_tag, ]%>%janitor::clean_names()
+training_predictors_x = model.matrix(cardio ~ ., training_data)[, -1] 
 training_outcome_y = training_data$cardio
 
 
 # For test dataset
-test_data = df_sample[-training_tag, ]
-test_predictors_x = as.data.frame(model.matrix(cardio ~ ., test_data)[, -1]) %>%
-  janitor::clean_names()
+test_data = df_sample[-training_tag, ]%>%janitor::clean_names()
+test_predictors_x = model.matrix(cardio ~ ., test_data)[, -1] 
 test_outcome_y = test_data$cardio
 
 # Control
