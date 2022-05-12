@@ -2,7 +2,9 @@
 title: "p8106 Final Project"
 author: "Qixiang Chen"
 date: "5/5/2022"
-output: pdf_document
+output: 
+  pdf_document:
+    latex_engine: xelatex
 ---
 
 ```{r, include = FALSE}
