@@ -238,7 +238,7 @@ p2  = pdp::partial(mars_model, pred.var = c("ap_hi"), grid.resolution = 10) %>%
 p2
 
 p3 = pdp::partial(mars_model, pred.var = c("age_day", "ap_hi"), grid.resolution = 10) %>%
-  pdp::plotPartial(levelplot = FALSE, zlab = "yhat", drape = TRUE, screen = list(z = 20, x = -60))
+  pdp::plotPartial(levelplot = FALSE, zlab = "yhat", drape = TRUE, screen = list(z = 120, x = -60))
 p3
 ```
 
