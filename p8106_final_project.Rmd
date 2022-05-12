@@ -195,7 +195,7 @@ summary(logistic_caret)
 
 
 2. MARS
-```{r, warning = FALSE}
+```{r, message = FALSE}
 #adjust cardio to be dummy
 
 set.seed(2022)
@@ -367,7 +367,7 @@ rf_fit = train(cardio ~ .,
               method = "ranger",
               tuneGrid = rf_grid,
               metric = "ROC",
-              trControl = control_rf)
+              trControl = control_class)
 
 summary(rf_fit)
 
