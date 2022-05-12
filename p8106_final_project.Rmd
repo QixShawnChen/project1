@@ -30,6 +30,7 @@ library(e1071)
 library(factoextra)
 library(gridExtra)
 library(kernlab)
+library(patchwork)
 ```
 
 
@@ -124,7 +125,6 @@ featurePlot(x = df_sample[, 1:5],
             )
 
 
-
 set.seed(2022)
 training_tag = createDataPartition(y = df_sample$cardio,
                                    p = 0.7,
@@ -142,10 +142,24 @@ test_predictors_x = model.matrix(cardio ~ ., test_data)[, -1]
 test_outcome_y = test_data$cardio
 
 # Control
-control = trainControl(method = "repeatedcv",
-                       summaryFunction = twoClassSummary,
-                       repeats = 5,
-                       classProbs = TRUE)
+control_class = trainControl(method = "repeatedcv", 
+                             number = 10, 
+                             repeats = 5,
+                             classProbs = TRUE,
+                             summaryFunction = twoClassSummary
+                             )
+plot(density(df_sample %>% 
+               filter(cardio == "nondiseased") %>% 
+               pull(ap_lo) * (df_sample %>% 
+               filter(cardio == "nondiseased") %>% 
+               pull(ap_lo) < 200)))
+
+
+plot(density(df_sample %>% 
+               filter(cardio == "diseased") %>% 
+               pull(ap_lo) * (df_sample %>% 
+               filter(cardio == "diseased") %>% 
+               pull(ap_lo) < 200)))
 ```
 
 
@@ -173,7 +187,7 @@ test_pred = rep("nondiseased", length(test_pred_prob))
 
 test_pred[test_pred_prob > 0.5] = "diseased"
 
-confusionMatrix(data = as.factor(test_pred),
+confusionMatrix(data = factor(test_pred, levels = c("nondiseased", "diseased")),
                 reference = test_outcome_y
                 )
 
@@ -186,7 +200,7 @@ logistic_caret = train(x = training_predictors_x,
                        y = training_outcome_y,
                        method = "glm",
                        metric = "ROC",
-                       trControl = control
+                       trControl = control_class
                        )
 summary(logistic_caret)
 ```
@@ -202,7 +216,7 @@ mars_model = train(x = training_predictors_x,
                    method = "earth",
                    tuneGrid = expand.grid(degree = 1:3, nprune = 2:13),
                    metric = "ROC",
-                   trControl = control
+                   trControl = control_class
                    )
 summary(mars_model)
 
@@ -223,7 +237,7 @@ mars_test_pred = rep("nondiseased", length(mars_test_pred_prob))
 
 mars_test_pred[mars_test_pred_prob > 0.5] = "diseased"
 
-confusionMatrix(data = as.factor(mars_test_pred),
+confusionMatrix(data = factor(mars_test_pred, levels = c("nondiseased", "diseased")),
                 reference = test_outcome_y
                 )
 
@@ -239,7 +253,7 @@ p2  = pdp::partial(mars_model, pred.var = c("ap_hi"), grid.resolution = 10) %>%
 p2
 
 p3 = pdp::partial(mars_model, pred.var = c("age_day", "ap_hi"), grid.resolution = 10) %>%
-  pdp::plotPartial(levelplot = FALSE, zlab = "yhat", drape = TRUE, screen = list(z = 120, x = -60))
+  pdp::plotPartial(levelplot = FALSE, zlab = "yhat", drape = TRUE, screen = list(z = 30, x = -60))
 p3
 ```
 
@@ -252,8 +266,13 @@ lda_model = train(x = training_predictors_x,
                   data = training_data,
                   method = "lda",
                   metric = "ROC",
-                  trControl = control)
+                  trControl = control_class)
 lda_model$results
+
+confusionMatrix(data = predict(lda_model, newdata = test_predictors_x),
+                reference = test_outcome_y
+                )
+auc(test_outcome_y, predict(lda_model, newdata = test_predictors_x, type = "prob")[, 2])
 
 lda_fit = lda(cardio ~., data = df_sample, subset = training_tag)
 plot(lda_fit)
@@ -270,12 +289,7 @@ boost_grid = expand.grid(n.trees = c(1000, 2000, 3000, 4000),
                             shrinkage = c(0.0004, 0.0006, 0.0008, 0.001),
                             n.minobsinnode = 1)
 
-control_class = trainControl(method = "repeatedcv", 
-                             number = 10, 
-                             repeats = 5,
-                             classProbs = TRUE,
-                             summaryFunction = twoClassSummary
-                             )
+
 
 # Using caret perform boosting on the training data
 boost_caret = train(cardio ~ .,
@@ -289,8 +303,29 @@ boost_caret = train(cardio ~ .,
 
 ggplot(boost_caret, highlight = TRUE)
 boost_caret$bestTune
+
+confusionMatrix(data = predict(boost_caret, newdata = test_data),
+                reference = test_outcome_y
+                )
+auc(test_outcome_y, predict(boost_caret, newdata = test_data, type = "prob")[, 2])
+
+
 # Plot the variable importance
-summary(boost_caret$finalModel, las = 2, cBars = 19, cex.names = 0.6)
+
+
+ggplot(boost_caret, highlight = TRUE) 
+a = summary(boost_caret$finalModel, las = 2, cBars = 19, cex.names = 0.4) %>% 
+  mutate(var = forcats::fct_reorder(var, -rel.inf))
+
+
+p1 = ggplot(boost_caret, highlight = TRUE) + 
+  labs(title = "Tuning Parameter Selection of Boost", y = "AUC")
+p2 = ggplot(aes(x = var, y = rel.inf), data = a) +
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Importance",
+        x = "Variable", y = "Importance")
+p1 + p2
 ```
 
 
@@ -374,7 +409,7 @@ test_pred_rf = rep("nondiseased", length(rf_pred ))
 
 test_pred_rf[rf_pred > 0.5] = "diseased"
 
-confusionMatrix(data = as.factor(test_pred_rf),
+confusionMatrix(data = factor(test_pred_rf, levels = c("nondiseased", "diseased")),
                 reference = test_outcome_y
                 )
 
@@ -427,16 +462,25 @@ barplot(sort(ranger::importance(rf_permutation_variable_importance),
 
 6. SVM
 ```{r}
+control_class2 = trainControl(method = "repeatedcv", 
+                             number = 10, 
+                             repeats = 5,
+                             classProbs = TRUE)
+
 set.seed(2022)
 linear_svc = train(cardio ~ .,
                       data = training_data,
                       method = "svmLinear",
                       tuneGrid = data.frame(C = exp(seq(-5, 2, len = 50))), 
-                      trControl = control_class, 
+                      trControl = control_class2, 
                    scale = TRUE)
 
 plot(linear_svc)
 linear_svc$bestTune
+linear_svc$results %>% 
+  filter(C == as.numeric(linear_svc$bestTune)) %>% 
+  pull(Accuracy)
+
 svm_pred = predict(linear_svc, newdata = test_data, type = "prob")[, 2]
 
 test_pred_svm = rep("nondiseased", length(svm_pred))
@@ -447,6 +491,31 @@ confusionMatrix(data = as.factor(test_pred_svm),
                 reference = test_outcome_y)
 ```
 
+
+```{r}
+radial_svc = train(cardio ~ .,
+                      data = training_data,
+                      method = "svmRadialCost",
+                      tuneGrid = data.frame(C = exp(seq(-5, 2, len = 50))), 
+                      trControl = control_class2, 
+                   scale = TRUE)
+
+plot(radial_svc)
+radial_svc$bestTune
+
+radial_svc$results %>% 
+  filter(C == as.numeric(radial_svc$bestTune)) %>% 
+  pull(Accuracy)
+
+radial_svm_pred = predict(radial_svc, newdata = test_data, type = "prob")[, 2]
+
+radial_test_pred_svm = rep("nondiseased", length(radial_svm_pred))
+
+radial_test_pred_svm[radial_svm_pred > 0.5] = "diseased"
+
+confusionMatrix(data = as.factor(radial_test_pred_svm),
+                reference = test_outcome_y)
+```
 
 
 
