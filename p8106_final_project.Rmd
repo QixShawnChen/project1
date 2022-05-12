@@ -2,7 +2,9 @@
 title: "p8106 Final Project"
 author: "Qixiang Chen"
 date: "5/5/2022"
-output: pdf_document
+output: 
+  pdf_document:
+    latex_engine: xelatex
 ---
 
 ```{r, include = FALSE}
@@ -384,10 +386,14 @@ confusionMatrix(data = as.factor(ct_test_pred),
 ```{r}
 # Train caret random forest model
 set.seed(2022)
+#control
+control_rf = trainControl(method = "cv",
+                          classProbs = T,
+                          summaryFunction = twoClassSummary)
 # Grid of tuning parameters
 rf_grid = expand.grid(mtry = 1:12, 
                       splitrule = "gini",
-                      min.node.size = seq(from = 2, to = 10, by = 2)
+                      min.node.size = seq(from = 2, to = 15, by = 2)
                       )
 
 # Find best-fitting model after model fitting to optimize computational efficiency
@@ -399,6 +405,10 @@ rf_fit = train(cardio ~ .,
               trControl = control_class)
 
 summary(rf_fit)
+
+#tuning parameter
+ggplot(rf_fit, highlight = T)
+rf_fit$bestTune
 
 rf_pred = predict(rf_fit, newdata = test_data, type = "prob")[,2]
 #rf_pred
