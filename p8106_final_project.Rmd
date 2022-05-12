@@ -296,6 +296,20 @@ summary(boost_caret$finalModel, las = 2, cBars = 19, cex.names = 0.6)
 ```
 
 
+
+
+```{r}
+pdp.gbm <- boost_caret %>% 
+  partial(pred.var = "ap_hi", 
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train =training_data ) +
+  ggtitle("Boosting") 
+
+pdp.gbm
+```
+
+
 5. Classification Tree
 ```{r}
 set.seed(2022)
@@ -344,7 +358,35 @@ ct_test_pred[ct_test_pred_prob > 0.5] = "diseased"
 confusionMatrix(data = as.factor(ct_test_pred),
                 reference = test_outcome_y
                 )
+#1SE
+confusionMatrix(data = as.factor(ct_test_pred),
+                reference = test_outcome_y
+                )
+#min
+ct_test_pred_prob2 = predict(classification_tree_minMSE, newdata = test_data)[, 2]
+
+ct_test_pred2 = rep("nondiseased", length(ct_test_pred_prob2))
+
+ct_test_pred2[ct_test_pred_prob2 > 0.5] = "diseased"
+confusionMatrix(data = as.factor(ct_test_pred2),
+                reference = test_outcome_y
+                )
+auc(test_outcome_y, predict(classification_tree_minMSE, newdata = test_data)[, 2])
+#best tune: cp
+cp_table[df_MSE_min, 1]
+cp_table[cp_table[, 4] < cp_table[df_MSE_min, 4] + cp_table[df_MSE_min, 5], 1][1]
+
 ```
+
+```{r}
+
+par(mfrow=c(2, 2))
+rpart.plot(classification_tree_1SE)
+rpart.plot(final_class_tree_minMSE)
+plotcp(classification_tree_minMSE)
+
+```
+
 
 
 ## Random forest
@@ -372,8 +414,12 @@ rf_fit = train(cardio ~ .,
 summary(rf_fit)
 
 #tuning parameter
-ggplot(rf_fit, highlight = T)
+tune = ggplot(rf_fit, highlight = T)
 rf_fit$bestTune
+
+ggplot(rf_fit, highlight = TRUE) + 
+  labs(title = "Tuning Parameter Selection of Random Forest", y = "AUC")
+
 
 rf_pred = predict(rf_fit, newdata = test_data, type = "prob")[,2]
 #rf_pred
@@ -432,7 +478,71 @@ barplot(sort(ranger::importance(rf_permutation_variable_importance),
         )
 ```
 
+```{r}
+p1 <- partial(rf_fit, pred.var = "ap_hi", 
+              plot = TRUE, rug = TRUE, 
+              plot.engine = "ggplot") + ggtitle("PDP (systolic blood pressure)")
+p2 <- partial(rf_fit, pred.var = "ap_lo", 
+              plot = TRUE, rug = TRUE, 
+              plot.engine = "ggplot") + ggtitle("PDP (diastolic blood pressure)")
+p3 <- partial(rf_fit, pred.var = "age_day", 
+              plot = TRUE, rug = TRUE, 
+              plot.engine = "ggplot") + ggtitle("PDP (age)")
+p4 <- partial(rf_fit, pred.var = "cholesterol", 
+              plot = TRUE, rug = TRUE, 
+              plot.engine = "ggplot") + ggtitle("PDP (cholesterol)")
 
+p5 <- pdp::partial(rf_fit, pred.var = c("ap_hi", "ap_lo"), 
+                   grid.resolution = 10) %>%
+      pdp::plotPartial(levelplot = FALSE, zlab = "yhat", drape = TRUE, 
+                       screen = list(z = 20, x = -60))
+
+grid.arrange(p1, p2,p3,p4, nrow = 2)
+```
+
+```{r}
+pdp_rf_ap_hi <- rf_fit %>% 
+  partial(pred.var = "ap_hi", 
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = training_data) +
+  ggtitle("systolic blood pressure") 
+
+pdp_rf_ap_lo <- rf_fit %>% 
+  partial(pred.var = "ap_lo", 
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = training_data) +
+  ggtitle("diastolic blood pressure")
+
+pdp_rf_age <- rf_fit %>% 
+  partial(pred.var = "age_day", 
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = training_data) +
+  ggtitle("age")
+
+pdp_rf_cho <- rf_fit %>% 
+  partial(pred.var = "cholesterol", 
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = training_data) +
+  ggtitle("cholesterol")
+
+p5 <- pdp::partial(rf_fit, pred.var = c("ap_hi", "age_day"), 
+                   grid.resolution = 20,prob = TRUE) %>%
+      pdp::plotPartial(levelplot = FALSE, zlab = "yhat", drape = TRUE, 
+                       screen = list(z = 60, x = -60))
+p5
+
+p6 <- pdp::partial(rf_fit, pred.var = c("ap_lo", "age_day"), 
+                   grid.resolution = 20,prob = TRUE) %>%
+      pdp::plotPartial(levelplot = FALSE, zlab = "yhat", drape = TRUE, 
+                       screen = list(z = 20, x = -60))
+p6
+
+grid.arrange(pdp_rf_ap_hi, pdp_rf_ap_lo, pdp_rf_age ,pdp_rf_cho, nrow = 2)
+```
 
 
 6. SVM
