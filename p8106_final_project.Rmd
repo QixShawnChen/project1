@@ -209,6 +209,7 @@ summary(mars_model)
 ggplot(mars_model, highlight = T)
 
 mars_model$bestTune
+mars_model$results
 coef(mars_model$finalModel)
 vip(mars_model$finalModel)
 
