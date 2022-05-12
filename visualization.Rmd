@@ -4,7 +4,51 @@ author: "Paulina Han"
 date: '2022-05-10'
 output: html_document
 ---
-```{r}
 
+```{r}
+library(gtsummary)
+library(tidyverse)
+library(caret)
 ```
+
+
+
+```{r}
+load("df_sample.Rdata")
+```
+
+- overall summary: table
+```{r}
+ df_sample %>% tbl_summary(by = cardio) %>% add_p()
+```
+
+
+
+
+
+
+- continuous variables
+```{r}
+#Feature Plot
+featurePlot(x = df_sample[, 1:5],
+            y = df_sample$cardio,
+            scales = list(x = list(relation="free"),
+                          y = list(relation="free")),
+            plot = "density", 
+            pch = "|",
+            auto.key = list(columns = 2),
+            dims = c(2, 1),
+            main = "Feature Plot of Continuous Varaibles"
+            )
+```
+
+
+- discrete variable
+
+ap_hi
+```{r}
+ggplot(data=df_sample, aes(x=cholesterol, fill=cardio)) +
+geom_bar(position=position_dodge(), alpha = 0.6)
+```
+
 
