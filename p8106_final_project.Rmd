@@ -266,7 +266,7 @@ set.seed(2022)
 
 boost_grid = expand.grid(n.trees = c(1000, 2000, 3000, 4000),
                             interaction.depth = 1:6,
-                            shrinkage = c(0.0005, 0.001, 0.002),
+                            shrinkage = c(0.0004, 0.0006, 0.0008, 0.001),
                             n.minobsinnode = 1)
 
 control_class = trainControl(method = "repeatedcv", 
