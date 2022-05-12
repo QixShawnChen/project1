@@ -195,7 +195,7 @@ summary(logistic_caret)
 
 
 2. MARS
-```{r, message = FALSE}
+```{r, warning = FALSE}
 #adjust cardio to be dummy
 
 set.seed(2022)
