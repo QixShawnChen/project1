@@ -460,7 +460,7 @@ rf_pred = predict(rf_fit, newdata = test_data, type = "prob")[,2]
 #rf_pred
 
 
-#ConfusionMatrix
+#ConfusionMatrix on test
 test_pred_rf = rep("nondiseased", length(rf_pred ))
 
 test_pred_rf[rf_pred > 0.5] = "diseased"
@@ -470,6 +470,17 @@ confusionMatrix(data = factor(test_pred_rf, levels = c("nondiseased", "diseased"
                 )
 
 auc(test_outcome_y, rf_pred)
+
+
+#ConfusionMatrix on train
+rf_pred2 = predict(rf_fit, newdata = training_data, type = "prob")[,2]
+test_pred_rf2 = rep("nondiseased", length(rf_pred2 ))
+
+test_pred_rf2[rf_pred2 > 0.5] = "diseased"
+
+confusionMatrix(data = factor(test_pred_rf2, levels = c("nondiseased", "diseased")),
+                reference = training_outcome_y
+                )
 ```
 
 
